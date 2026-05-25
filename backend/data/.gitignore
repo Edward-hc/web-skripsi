@@ -1,0 +1,4 @@
+# Ignore semua file JSON kecuali contoh
+*.json
+!cabang.json.example
+

@@ -1,6 +1,8 @@
+import UserModel from "../models/userModel.js";
+
 export default class RegisterPresenter {
   constructor(apiService) {
-    this.apiService = apiService;
+    this.userModel = new UserModel(apiService);
   }
 
   async handleRegister(form) {
@@ -26,7 +28,7 @@ export default class RegisterPresenter {
     }
 
     try {
-      const res = await this.apiService.post("/register.php", data);
+      const res = await this.userModel.register(data);
       console.log("Response dari backend:", res); 
 
       if (res.success) {

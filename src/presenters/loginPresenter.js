@@ -1,16 +1,16 @@
-import { setCurrentUser } from "../utils/authStorage.js";
+import UserModel from "../models/userModel.js";
 
 export default class LoginPresenter {
   constructor(apiService) {
-    this.api = apiService;
+    this.userModel = new UserModel(apiService);
   }
 
   async handleLogin({ email, password, role }) {
     try {
-      const result = await this.api.post("/login.php", { email, password, role });
+      const result = await this.userModel.login({ email, password, role });
 
       if (result.success) {
-        setCurrentUser(result.data);
+        this.userModel.saveSession(result.data);
 
         if (role === "pemilik") {
           window.location.hash = "#/manage-accounts";

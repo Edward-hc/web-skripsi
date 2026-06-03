@@ -46,7 +46,6 @@ document.addEventListener("DOMContentLoaded", () => {
     app.innerHTML = "";
     const route = window.location.hash;
     const applySidebarLayoutIfAny = () => {
-      // Saat pindah halaman dengan sidebar collapsed, jangan ada transisi geser.
       if (document.getElementById("sidebar")) {
         applySidebarCollapsedLayout(isSidebarCollapsedPersisted(), true);
       }

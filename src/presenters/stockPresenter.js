@@ -40,5 +40,10 @@ export default class StockPresenter {
   async manageRusakStock(payload) {
     return await this.api.post("/stok_rusak_manage.php", payload);
   }
+
+  async getRusakDisposals(userID) {
+    const q = userID ?  `?userID=${encodeURIComponent(userID)}` : "";
+    return await this.api.get(`/stok_rusak_manage.php${q}`);
+  }
 }
 

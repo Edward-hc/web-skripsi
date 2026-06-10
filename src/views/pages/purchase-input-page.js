@@ -297,7 +297,7 @@ export default class PurchaseInputPage {
   }
 
   resolveHargaBeli(item) {
-    return parseFloat(item.hargaModal ?? item.hargaJual ?? item.harga ?? 0) || 0;
+    return parseFloat(item.hargaModal ?? item.hargaJual ?? 0) || 0;
   }
 
   renderProductList(container) {

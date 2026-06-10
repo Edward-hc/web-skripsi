@@ -306,9 +306,9 @@ export default class PosPage {
 
   resolveUnitPrice(item, customerType) {
     if (customerType === "Reseller") {
-      return parseFloat(item.hargaReseller ?? item.hargaJual ?? item.harga ?? 0) || 0;
+      return parseFloat(item.hargaReseller ?? item.hargaJual ?? 0) || 0;
     }
-    return parseFloat(item.hargaJual ?? item.harga ?? 0) || 0;
+    return parseFloat(item.hargaJual ?? 0) || 0;
   }
 
   showAlert(container, message) {
@@ -444,8 +444,8 @@ export default class PosPage {
         varianID: item.varianID,
         namaVarian: item.namaVarian,
         namaProduk: item.namaProduk,
-        hargaJual: parseFloat(item.hargaJual ?? item.harga ?? 0) || 0,
-        hargaReseller: parseFloat(item.hargaReseller ?? item.hargaJual ?? item.harga ?? 0) || 0,
+        hargaJual: parseFloat(item.hargaJual ?? 0) || 0,
+        hargaReseller: parseFloat(item.hargaReseller ?? item.hargaJual ?? 0) || 0,
         harga: this.resolveUnitPrice(item, this.getCustomerType(container)),
         stok: stok,
         qty: qtyToAdd,

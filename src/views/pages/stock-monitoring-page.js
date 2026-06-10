@@ -5,10 +5,10 @@ import { getCurrentUser } from "../../utils/authStorage.js";
 export default class StockMonitoringPage {
   constructor(presenter) {
     this.presenter = presenter;
-    this.allStocks = []; // Store all stocks for filtering
+    this.allStocks = []; 
     this.currentSearchQuery = "";
-    this.selectedBranch = ""; // namaCabang; empty = semua cabang
-    this.allAddStockVariants = []; // cache varian untuk form tambah stok
+    this.selectedBranch = ""; 
+    this.allAddStockVariants = []; 
     this.allMutations = []; // cache catatan mutasi
     this.mutationDate = ""; // yyyy-mm-dd (WIB)
     this.mutationDraftItems = []; // item mutasi per nota (multi varian)
@@ -70,6 +70,9 @@ export default class StockMonitoringPage {
             </button>
             <button id="mutationNotesBtn" class="bg-gray-700 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-gray-800 transition whitespace-nowrap">
               Catatan Mutasi
+            </button>
+            <button id="rusakBuangNotesBtn" class="bg-amber-800 text-white px-6 py-2.5 rounded-lg font-medium hover:bg-amber-900 transition whitespace-nowrap">
+              Catatan Buang Rusak
             </button>
           </div>
         </div>
@@ -419,6 +422,27 @@ export default class StockMonitoringPage {
         </div>
       </div>
 
+      <!-- Modal catatan buang rusak -->
+      <div id="rusakBuangModal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl p-5 w-full max-w-5xl max-h-[85vh] flex flex-col">
+          <div class="flex justify-between items-center mb-2">
+            <h3 class="text-lg font-semibold">Catatan Buang Rusak</h3>
+            <button type="button" id="closeRusakBuangModal" class="text-gray-500 hover:text-gray-800 text-xl leading-none">&times;</button>
+          </div>
+          <input type="text" id="searchRusakBuang" placeholder="Cari varian, lokasi, petugas, keterangan..." class="border border-gray-300 p-2 rounded-lg mb-3 text-sm" />
+          <div class="overflow-auto border border-gray-200 rounded-lg flex-1">
+            <table class="w-full text-sm">
+              <thead class="bg-gray-50 sticky top-0"><tr>
+                <th class="px-3 py-2 text-left">Varian</th><th class="px-3 py-2 text-left">Lokasi</th>
+                <th class="px-3 py-2 text-right">Qty</th><th class="px-3 py-2 text-left">Tanggal</th>
+                <th class="px-3 py-2 text-left">Petugas</th><th class="px-3 py-2 text-left">Keterangan</th>
+              </tr></thead>
+              <tbody id="rusakBuangTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
       <!-- Modal: kelola qty barang rusak (buang atau kembalikan ke layak) -->
       <div id="rusakKelolaModal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 flex items-center justify-center p-4">
         <div class="bg-white rounded-xl shadow-xl p-6 w-full max-w-md">
@@ -437,6 +461,10 @@ export default class StockMonitoringPage {
             <div>
               <label class="block text-sm text-gray-700 mb-1">Qty</label>
               <input type="number" id="rusakKelolaQty" min="1" class="w-full border border-gray-300 p-2 rounded-lg text-sm" value="1" />
+            </div>
+            <div>
+              <label class="block text-sm text-gray-700 mb-1">Keterangan pembuangan <span class="text-amber-700">(wajib saat buang)</span></label>
+              <textarea id="rusakKelolaKeterangan" rows="2" class="w-full border border-gray-300 p-2 rounded-lg text-sm" placeholder="Contoh: rusak total, dibuang ke tempat sampah..."></textarea>
             </div>
             <div class="flex flex-col gap-2 pt-1">
               <button type="button" id="rusakKelolaDisposeBtn" class="w-full px-4 py-2.5 rounded-lg bg-gray-700 text-white text-sm hover:bg-gray-800">Buang dari catatan (hapus)</button>
@@ -607,7 +635,7 @@ export default class StockMonitoringPage {
                     data-lokasi="${stock.lokasi}"
                     data-jumlah="${jumlah}"
                     data-varianid="${stock.varianID}"
-                    data-hargamodal="${stock.hargaModal ?? stock.harga ?? 0}"
+                    data-hargamodal="${stock.hargaModal ?? 0}"
                     ${mutateButtonDisabledAttr}
                     title="${jumlah === 0 ? 'Stok habis, tidak dapat dimutasi' : 'Mutasi stok'}"
                   >
@@ -747,6 +775,10 @@ export default class StockMonitoringPage {
     const mutationModal = container.querySelector("#mutationModal");
     const mutationForm = container.querySelector("#mutationForm");
     const mutateStockBtn = container.querySelector("#mutateStockBtn");
+    const rusakBuangBtn = container.querySelector("#rusakBuangNotesBtn");
+    const rusakBuangModal = container.querySelector("#rusakBuangModal");
+    const searchRusakBuang = container.querySelector("#searchRusakBuang");
+
     const mutationNotesBtn = container.querySelector("#mutationNotesBtn");
     const closeMutationModal = container.querySelector("#closeMutationModal");
     const cancelMutationBtn = container.querySelector("#cancelMutationBtn");
@@ -853,7 +885,7 @@ export default class StockMonitoringPage {
           );
         });
       mutationVarianSelect.innerHTML = '<option value="">Pilih varian dari lokasi asal</option>' + stocks.map((s) => {
-        const hargaModal = parseFloat(s.hargaModal ?? s.harga ?? 0) || 0;
+        const hargaModal = parseFloat(s.hargaModal ?? 0) || 0;
         return `<option value="${s.stokID}" data-varianid="${s.varianID}" data-nama="${s.namaVarian || s.varianID}" data-jumlah="${parseInt(s.jumlah || 0, 10) || 0}" data-harga="${Math.max(1, Math.round(hargaModal))}">${s.namaVarian || s.varianID} (stok: ${parseInt(s.jumlah || 0, 10) || 0})</option>`;
       }).join("");
       if (mutationDraftHint) {
@@ -986,6 +1018,17 @@ export default class StockMonitoringPage {
         await this.renderMutationNotes(container);
         mutationNotesModal.classList.remove("hidden");
       });
+    }
+
+    const refreshRusakBuang = () => this.refreshRusakBuangLog(container, searchRusakBuang?.value || "");
+    if (rusakBuangBtn && rusakBuangModal) {
+      rusakBuangBtn.addEventListener("click", async () => {
+        if (searchRusakBuang) searchRusakBuang.value = "";
+        await refreshRusakBuang();
+        rusakBuangModal.classList.remove("hidden");
+      });
+      container.querySelector("#closeRusakBuangModal")?.addEventListener("click", () => rusakBuangModal.classList.add("hidden"));
+      searchRusakBuang?.addEventListener("input", refreshRusakBuang);
     }
 
     // Tombol header untuk membuat mutasi batch (tanpa pilih baris dulu)
@@ -1267,6 +1310,7 @@ export default class StockMonitoringPage {
       const varEl = container.querySelector("#rusakKelolaVarianLabel");
       const jrEl = container.querySelector("#rusakKelolaJumlahRusak");
       const qtyIn = container.querySelector("#rusakKelolaQty");
+      const ketEl = container.querySelector("#rusakKelolaKeterangan");
       if (idEl) idEl.value = String(stokID);
       if (varEl) varEl.value = namaVarian || "";
       if (jrEl) jrEl.value = String(jumlahRusak);
@@ -1274,6 +1318,7 @@ export default class StockMonitoringPage {
         qtyIn.max = String(jumlahRusak);
         qtyIn.value = "1";
       }
+      if (ketEl) ketEl.value = "";
       rusakKelolaModal.classList.remove("hidden");
     };
 
@@ -1309,6 +1354,7 @@ export default class StockMonitoringPage {
       const stokID = parseInt(container.querySelector("#rusakKelolaStokID")?.value || 0, 10);
       const maxJr = parseInt(container.querySelector("#rusakKelolaJumlahRusak")?.value || 0, 10);
       const qty = parseInt(container.querySelector("#rusakKelolaQty")?.value || 0, 10);
+      const keterangan = (container.querySelector("#rusakKelolaKeterangan")?.value || "").trim();
       if (!stokID || !qty || qty <= 0) {
         alert("Qty tidak valid.");
         return;
@@ -1317,13 +1363,19 @@ export default class StockMonitoringPage {
         alert(`Maksimal ${maxJr} unit.`);
         return;
       }
+      if (action === "dispose" && !keterangan) {
+        alert("Keterangan wajib diisi saat membuang barang rusak.");
+        return;
+      }
       try {
-        const res = await this.presenter.manageRusakStock({
+        const payload = {
           userID: user.userID,
           stokID,
           qty,
           action
-        });
+        };
+        if (action === "dispose") payload.keterangan = keterangan;
+        const res = await this.presenter.manageRusakStock(payload);
         if (!res.success) {
           alert(res.message || "Gagal.");
           return;
@@ -1545,6 +1597,32 @@ export default class StockMonitoringPage {
         });
     } catch (err) {
       console.error("Error loading branches:", err);
+    }
+  }
+
+  async refreshRusakBuangLog(container, search = "") {
+    const table = container.querySelector("#rusakBuangTable");
+    if (!table) return;
+    const q = (search || "").toLowerCase();
+    const match = (row) => !q || [row.namaVarian, row.lokasi, row.keterangan, row.namaPetugas, row.jumlah, row.tanggalBuang]
+      .some((v) => String(v ?? "").toLowerCase().includes(q));
+    try {
+      const user = getCurrentUser();
+      const res = await this.presenter.getRusakDisposals(user?.userID);
+      const rows = (res.data || []).filter(match);
+      table.innerHTML = rows.length
+        ? rows.map((r) => `<tr class="hover:bg-gray-50">
+            <td class="px-3 py-2">${r.namaVarian || "-"}</td>
+            <td class="px-3 py-2">${r.lokasi || "-"}</td>
+            <td class="px-3 py-2 text-right font-semibold text-amber-800">${r.jumlah ?? 0}</td>
+            <td class="px-3 py-2">${r.tanggalBuang ? this.formatWIB(r.tanggalBuang) : "-"}</td>
+            <td class="px-3 py-2">${r.namaPetugas || "-"}</td>
+            <td class="px-3 py-2">${(r.keterangan || "").trim() || "-"}</td>
+          </tr>`).join("")
+        : `<tr><td colspan="6" class="px-3 py-6 text-center text-gray-500">Belum ada catatan buang rusak</td></tr>`;
+    } catch (err) {
+      console.error(err);
+      table.innerHTML = `<tr><td colspan="6" class="px-3 py-6 text-center text-red-500">Gagal memuat data</td></tr>`;
     }
   }
 

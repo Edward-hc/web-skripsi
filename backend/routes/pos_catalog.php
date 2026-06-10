@@ -1,5 +1,6 @@
 <?php
 require_once '../config/db_connect.php';
+require_once '../utils/produkvarian_schema.php';
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: GET, OPTIONS");
@@ -33,42 +34,10 @@ function ensureKaryawanCabangColumn($conn) {
   }
 }
 
-function ensureVariantPriceColumns($conn) {
-  try {
-    $dbName = $conn->query("SELECT DATABASE()")->fetchColumn();
-    if (!$dbName) return;
-
-    $required = [
-      "hargaJual" => "ALTER TABLE produkvarian ADD COLUMN hargaJual DECIMAL(10,2) NULL AFTER harga",
-      "hargaReseller" => "ALTER TABLE produkvarian ADD COLUMN hargaReseller DECIMAL(10,2) NULL AFTER hargaJual",
-      "hargaModal" => "ALTER TABLE produkvarian ADD COLUMN hargaModal DECIMAL(10,2) NULL AFTER hargaReseller"
-    ];
-
-    foreach ($required as $col => $alterSql) {
-      $stmt = $conn->prepare("
-        SELECT COUNT(*) 
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'produkvarian' AND COLUMN_NAME = ?
-      ");
-      $stmt->execute([$dbName, $col]);
-      $exists = (int)$stmt->fetchColumn() > 0;
-      if (!$exists) {
-        $conn->exec($alterSql);
-      }
-    }
-
-    $conn->exec("UPDATE produkvarian SET hargaJual = harga WHERE hargaJual IS NULL");
-    $conn->exec("UPDATE produkvarian SET hargaReseller = harga WHERE hargaReseller IS NULL");
-    $conn->exec("UPDATE produkvarian SET hargaModal = harga WHERE hargaModal IS NULL");
-  } catch (Exception $e) {
-    // ignore
-  }
-}
-
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
   try {
     ensureKaryawanCabangColumn($conn);
-    ensureVariantPriceColumns($conn);
+    ensureProdukvarianPriceSchema($conn);
 
     $userID = isset($_GET['userID']) ? intval($_GET['userID']) : 0;
     if (!$userID) {
@@ -96,7 +65,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET') {
       SELECT 
         pv.varianID,
         pv.namaVarian,
-        pv.harga,
         pv.hargaJual,
         pv.hargaReseller,
         pv.hargaModal,

@@ -1,5 +1,6 @@
 <?php
 require_once '../config/db_connect.php';
+require_once '../utils/produkvarian_schema.php';
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
@@ -11,36 +12,6 @@ date_default_timezone_set('Asia/Jakarta');
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
   http_response_code(200);
   exit();
-}
-
-function ensureVariantPriceColumns($conn) {
-  try {
-    $dbName = $conn->query("SELECT DATABASE()")->fetchColumn();
-    if (!$dbName) return;
-
-    $required = [
-      "hargaJual" => "ALTER TABLE produkvarian ADD COLUMN hargaJual DECIMAL(10,2) NULL AFTER harga",
-      "hargaReseller" => "ALTER TABLE produkvarian ADD COLUMN hargaReseller DECIMAL(10,2) NULL AFTER hargaJual",
-      "hargaModal" => "ALTER TABLE produkvarian ADD COLUMN hargaModal DECIMAL(10,2) NULL AFTER hargaReseller"
-    ];
-
-    foreach ($required as $col => $alterSql) {
-      $stmt = $conn->prepare("
-        SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'produkvarian' AND COLUMN_NAME = ?
-      ");
-      $stmt->execute([$dbName, $col]);
-      if ((int)$stmt->fetchColumn() === 0) {
-        $conn->exec($alterSql);
-      }
-    }
-
-    $conn->exec("UPDATE produkvarian SET hargaJual = harga WHERE hargaJual IS NULL");
-    $conn->exec("UPDATE produkvarian SET hargaReseller = harga WHERE hargaReseller IS NULL");
-    $conn->exec("UPDATE produkvarian SET hargaModal = harga WHERE hargaModal IS NULL");
-  } catch (Exception $e) {
-    // ignore
-  }
 }
 
 function ensureMutationColumns($conn) {
@@ -255,7 +226,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
 
   try {
-    ensureVariantPriceColumns($conn);
+    ensureProdukvarianPriceSchema($conn);
     ensureMutationColumns($conn);
 
     $noFakturMutasi = ensureUniqueInvoice($conn, $data['noFakturMutasi'] ?? '');
@@ -309,10 +280,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         throw new Exception("Qty mutasi melebihi stok tersedia untuk salah satu item");
       }
 
-      $stmt = $conn->prepare("SELECT harga, hargaModal FROM produkvarian WHERE varianID = ?");
+      $stmt = $conn->prepare("SELECT hargaModal FROM produkvarian WHERE varianID = ?");
       $stmt->execute([$varianID]);
       $variant = $stmt->fetch(PDO::FETCH_ASSOC);
-      $hargaModalDefault = $variant ? floatval($variant['hargaModal'] ?? $variant['harga'] ?? 0) : 0;
+      $hargaModalDefault = $variant ? floatval($variant['hargaModal'] ?? 0) : 0;
       $hargaSatuan = $hargaInput > 0 ? $hargaInput : $hargaModalDefault;
       if ($hargaSatuan <= 0) throw new Exception("Harga satuan mutasi harus lebih dari 0");
 

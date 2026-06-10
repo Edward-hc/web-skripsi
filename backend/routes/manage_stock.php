@@ -1,5 +1,6 @@
 <?php
 require_once '../config/db_connect.php';
+require_once '../utils/produkvarian_schema.php';
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS");
@@ -34,9 +35,10 @@ function ensureStokJumlahRusakColumn($conn) {
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
   try {
     ensureStokJumlahRusakColumn($conn);
+    ensureProdukvarianPriceSchema($conn);
     $sql = "
       SELECT s.stokID, s.jumlah, COALESCE(s.jumlahRusak, 0) AS jumlahRusak, s.tanggalUpdate, s.lokasi, s.varianID,
-             pv.namaVarian, pv.stokMinimum, pv.produkID, pv.harga, pv.hargaJual, pv.hargaReseller, pv.hargaModal,
+             pv.namaVarian, pv.stokMinimum, pv.produkID, pv.hargaJual, pv.hargaReseller, pv.hargaModal,
              p.namaProduk
       FROM stok s
       LEFT JOIN produkvarian pv ON s.varianID = pv.varianID

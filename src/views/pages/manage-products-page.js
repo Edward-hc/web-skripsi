@@ -651,9 +651,9 @@ export default class ManageProductsPage {
           <td class="px-6 py-4 text-sm">${v.varianID}</td>
           <td class="px-6 py-4 text-sm font-medium">${v.namaVarian}</td>
           <td class="px-6 py-4 text-sm"><span class="px-2 py-1 bg-green-100 text-green-800 rounded text-xs">${v.namaProduk || "-"}</span></td>
-          <td class="px-6 py-4 text-sm">Rp ${Number(v.hargaJual ?? v.harga ?? 0).toLocaleString('id-ID')}</td>
-          <td class="px-6 py-4 text-sm">Rp ${Number(v.hargaReseller ?? v.harga ?? 0).toLocaleString('id-ID')}</td>
-          <td class="px-6 py-4 text-sm">Rp ${Number(v.hargaModal ?? v.harga ?? 0).toLocaleString('id-ID')}</td>
+          <td class="px-6 py-4 text-sm">Rp ${Number(v.hargaJual ?? 0).toLocaleString('id-ID')}</td>
+          <td class="px-6 py-4 text-sm">Rp ${Number(v.hargaReseller ?? 0).toLocaleString('id-ID')}</td>
+          <td class="px-6 py-4 text-sm">Rp ${Number(v.hargaModal ?? 0).toLocaleString('id-ID')}</td>
           <td class="px-6 py-4 text-sm">${v.stokMinimum}</td>
           <td class="px-6 py-4 text-sm">
             <span class="px-2 py-1 rounded text-xs ${v.status === 'Tersedia' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
@@ -684,7 +684,6 @@ export default class ManageProductsPage {
         varian.varianID?.toString().includes(query) ||
         varian.namaVarian?.toLowerCase().includes(query) ||
         varian.namaProduk?.toLowerCase().includes(query) ||
-        varian.harga?.toString().includes(query) ||
         varian.hargaJual?.toString().includes(query) ||
         varian.hargaReseller?.toString().includes(query) ||
         varian.hargaModal?.toString().includes(query) ||
@@ -715,7 +714,6 @@ export default class ManageProductsPage {
         varianID: id,
         namaVarian: form.querySelector("#namaVarian").value,
         produkID: form.querySelector("#produkVarian").value,
-        harga: form.querySelector("#hargaJualVarian").value, // compatibility
         hargaJual: form.querySelector("#hargaJualVarian").value,
         hargaReseller: form.querySelector("#hargaResellerVarian").value,
         hargaModal: form.querySelector("#hargaModalVarian").value,
@@ -769,9 +767,9 @@ export default class ManageProductsPage {
           form.querySelector("#varianID").value = varian.varianID;
           form.querySelector("#namaVarian").value = varian.namaVarian;
           form.querySelector("#produkVarian").value = varian.produkID;
-          form.querySelector("#hargaJualVarian").value = varian.hargaJual ?? varian.harga ?? 0;
-          form.querySelector("#hargaResellerVarian").value = varian.hargaReseller ?? varian.harga ?? 0;
-          form.querySelector("#hargaModalVarian").value = varian.hargaModal ?? varian.harga ?? 0;
+          form.querySelector("#hargaJualVarian").value = varian.hargaJual ?? 0;
+          form.querySelector("#hargaResellerVarian").value = varian.hargaReseller ?? 0;
+          form.querySelector("#hargaModalVarian").value = varian.hargaModal ?? 0;
           form.querySelector("#stokMinVarian").value = varian.stokMinimum;
           form.querySelector("#statusVarian").value = varian.status;
           cancelBtn.classList.remove("hidden");

@@ -16,23 +16,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 date_default_timezone_set('Asia/Jakarta');
 
-function ensureKaryawanCabangColumn($conn) {
-  try {
-    $dbName = $conn->query("SELECT DATABASE()")->fetchColumn();
-    if (!$dbName) return;
-    $stmt = $conn->prepare("
-      SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'karyawan' AND COLUMN_NAME = 'cabang'
-    ");
-    $stmt->execute([$dbName]);
-    if ((int)$stmt->fetchColumn() === 0) {
-      $conn->exec("ALTER TABLE karyawan ADD COLUMN cabang VARCHAR(50) NULL AFTER status");
-    }
-  } catch (Exception $e) {
-    // ignore
-  }
-}
-
 function ensureStokJumlahRusakColumn($conn) {
   try {
     $dbName = $conn->query("SELECT DATABASE()")->fetchColumn();
@@ -72,26 +55,10 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
   }
 
   try {
-    ensureKaryawanCabangColumn($conn);
     ensureStokJumlahRusakColumn($conn);
 
-    $owner = isOwnerUser($conn, $userID);
-    $cabang = '';
-
-    if (!$owner) {
-      $stmtK = $conn->prepare("SELECT karyawanID, cabang, status FROM karyawan WHERE userID = ?");
-      $stmtK->execute([$userID]);
-      $karyawan = $stmtK->fetch(PDO::FETCH_ASSOC);
-      if (!$karyawan) {
-        throw new Exception("Hanya akun pemilik atau karyawan yang dapat mencatat barang rusak");
-      }
-      if (strtolower(trim((string)($karyawan['status'] ?? ''))) === 'tidak aktif') {
-        throw new Exception("Karyawan tidak aktif");
-      }
-      $cabang = trim((string)($karyawan['cabang'] ?? ''));
-      if ($cabang === '') {
-        throw new Exception("Cabang karyawan belum diisi. Silakan isi cabang di Manajemen Akun.");
-      }
+    if (!isOwnerUser($conn, $userID)) {
+      throw new Exception("Hanya pemilik yang dapat mencatat barang rusak dari monitoring stok");
     }
 
     $stmtS = $conn->prepare("SELECT stokID, varianID, lokasi, jumlah, COALESCE(jumlahRusak, 0) AS jumlahRusak FROM stok WHERE stokID = ?");
@@ -99,9 +66,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $row = $stmtS->fetch(PDO::FETCH_ASSOC);
     if (!$row) {
       throw new Exception("Stok tidak ditemukan");
-    }
-    if (!$owner && trim((string)$row['lokasi']) !== $cabang) {
-      throw new Exception("Stok tidak berada di cabang Anda");
     }
 
     $jumlah = intval($row['jumlah']);

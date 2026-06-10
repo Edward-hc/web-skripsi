@@ -127,6 +127,11 @@ document.addEventListener("DOMContentLoaded", () => {
           window.location.hash = "#/login";
           return;
         }
+        if (!hasRole(user, "pemilik")) {
+          alert("Anda tidak memiliki akses ke halaman ini.");
+          window.location.hash = "#/login";
+          return;
+        }
         const presenter = new StockPresenter(apiService);
         const page = new StockMonitoringPage(presenter);
         app.appendChild(await page.render());

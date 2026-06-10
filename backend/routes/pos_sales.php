@@ -1,5 +1,6 @@
 <?php
 require_once '../config/db_connect.php';
+require_once '../utils/produkvarian_schema.php';
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Content-Type");
 header("Access-Control-Allow-Methods: POST, OPTIONS");
@@ -27,38 +28,6 @@ function ensureKaryawanCabangColumn($conn) {
     if (!$exists) {
       $conn->exec("ALTER TABLE karyawan ADD COLUMN cabang VARCHAR(50) NULL AFTER status");
     }
-  } catch (Exception $e) {
-    // ignore
-  }
-}
-
-function ensureVariantPriceColumns($conn) {
-  try {
-    $dbName = $conn->query("SELECT DATABASE()")->fetchColumn();
-    if (!$dbName) return;
-
-    $required = [
-      "hargaJual" => "ALTER TABLE produkvarian ADD COLUMN hargaJual DECIMAL(10,2) NULL AFTER harga",
-      "hargaReseller" => "ALTER TABLE produkvarian ADD COLUMN hargaReseller DECIMAL(10,2) NULL AFTER hargaJual",
-      "hargaModal" => "ALTER TABLE produkvarian ADD COLUMN hargaModal DECIMAL(10,2) NULL AFTER hargaReseller"
-    ];
-
-    foreach ($required as $col => $alterSql) {
-      $stmt = $conn->prepare("
-        SELECT COUNT(*) 
-        FROM INFORMATION_SCHEMA.COLUMNS 
-        WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'produkvarian' AND COLUMN_NAME = ?
-      ");
-      $stmt->execute([$dbName, $col]);
-      $exists = (int)$stmt->fetchColumn() > 0;
-      if (!$exists) {
-        $conn->exec($alterSql);
-      }
-    }
-
-    $conn->exec("UPDATE produkvarian SET hargaJual = harga WHERE hargaJual IS NULL");
-    $conn->exec("UPDATE produkvarian SET hargaReseller = harga WHERE hargaReseller IS NULL");
-    $conn->exec("UPDATE produkvarian SET hargaModal = harga WHERE hargaModal IS NULL");
   } catch (Exception $e) {
     // ignore
   }
@@ -146,7 +115,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
   try {
     ensureKaryawanCabangColumn($conn);
-    ensureVariantPriceColumns($conn);
+    ensureProdukvarianPriceSchema($conn);
     ensurePenjualanCatatanColumn($conn);
     ensureLaporanTanggalBuatIsDateTime($conn);
 
@@ -193,7 +162,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         $diskonType = 'NOMINAL';
       }
 
-      $stmt = $conn->prepare("SELECT harga, hargaJual, hargaReseller FROM produkvarian WHERE varianID = ?");
+      $stmt = $conn->prepare("SELECT hargaJual, hargaReseller FROM produkvarian WHERE varianID = ?");
       $stmt->execute([$varianID]);
       $variant = $stmt->fetch(PDO::FETCH_ASSOC);
       if (!$variant) {
@@ -201,8 +170,8 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
       }
 
       $harga = $isReseller
-        ? floatval($variant['hargaReseller'] ?? $variant['hargaJual'] ?? $variant['harga'] ?? 0)
-        : floatval($variant['hargaJual'] ?? $variant['harga'] ?? 0);
+        ? floatval($variant['hargaReseller'] ?? $variant['hargaJual'] ?? 0)
+        : floatval($variant['hargaJual'] ?? 0);
 
       $subtotal = $harga * $qty;
       $diskonItem = calculateItemDiscount($qty, $harga, $diskonType, $diskonValue);

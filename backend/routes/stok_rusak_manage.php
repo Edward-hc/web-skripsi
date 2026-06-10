@@ -1,13 +1,12 @@
 <?php
 /**
- * Kelola qty barang rusak yang sudah ada di jumlahRusak:
- * - dispose: mengurangi jumlahRusak saja (barang dibuang/tidak dipakai lagi)
- * - restore: memindahkan dari jumlahRusak kembali ke jumlah (layak dijual lagi)
+ * Stok rusak: GET = riwayat buang, POST action=dispose|restore
  */
 require_once '../config/db_connect.php';
+require_once '../utils/stok_rusak_db.php';
 header("Access-Control-Allow-Origin: *");
 header("Access-Control-Allow-Headers: Content-Type");
-header("Access-Control-Allow-Methods: POST, OPTIONS");
+header("Access-Control-Allow-Methods: GET, POST, OPTIONS");
 header("Content-Type: application/json");
 
 if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
@@ -17,130 +16,78 @@ if ($_SERVER['REQUEST_METHOD'] === 'OPTIONS') {
 
 date_default_timezone_set('Asia/Jakarta');
 
-function ensureKaryawanCabangColumn($conn) {
+if ($_SERVER['REQUEST_METHOD'] === 'GET') {
   try {
-    $dbName = $conn->query("SELECT DATABASE()")->fetchColumn();
-    if (!$dbName) return;
-    $stmt = $conn->prepare("
-      SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'karyawan' AND COLUMN_NAME = 'cabang'
-    ");
-    $stmt->execute([$dbName]);
-    if ((int)$stmt->fetchColumn() === 0) {
-      $conn->exec("ALTER TABLE karyawan ADD COLUMN cabang VARCHAR(50) NULL AFTER status");
-    }
+    ensureStokRusakBuangSchema($conn);
+    $userID = intval($_GET['userID'] ?? 0);
+    requireOwnerForRusakManage($conn, $userID);
+    $sql = "SELECT b.buangRusakID, b.stokID, b.varianID, b.lokasi, b.jumlah, b.keterangan, b.tanggalBuang,
+      IF(pv.namaVarian IS NULL OR pv.namaVarian='', CONCAT('Varian ID: ', b.varianID),
+        CONCAT(pv.namaVarian, IFNULL(CONCAT(' (', p.namaProduk, ')'), ''))) AS namaVarian,
+      COALESCE(NULLIF(TRIM(CONCAT(u.fname,' ',u.lname)),''), u.username, '-') AS namaPetugas
+      FROM stok_rusak_buang b
+      LEFT JOIN produkvarian pv ON b.varianID=pv.varianID
+      LEFT JOIN produk p ON pv.produkID=p.produkID
+      LEFT JOIN user u ON b.userID=u.userID
+      ORDER BY b.tanggalBuang DESC, b.buangRusakID DESC";
+    $stmt = $conn->prepare($sql);
+    $stmt->execute();
+    echo json_encode(["success" => true, "data" => $stmt->fetchAll(PDO::FETCH_ASSOC)]);
   } catch (Exception $e) {
-    // ignore
+    echo json_encode(["success" => false, "message" => $e->getMessage()]);
   }
-}
-
-function ensureStokJumlahRusakColumn($conn) {
-  try {
-    $dbName = $conn->query("SELECT DATABASE()")->fetchColumn();
-    if (!$dbName) return;
-    $stmt = $conn->prepare("
-      SELECT COUNT(*) FROM INFORMATION_SCHEMA.COLUMNS
-      WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'stok' AND COLUMN_NAME = 'jumlahRusak'
-    ");
-    $stmt->execute([$dbName]);
-    if ((int)$stmt->fetchColumn() === 0) {
-      $conn->exec("ALTER TABLE stok ADD COLUMN jumlahRusak INT NOT NULL DEFAULT 0 AFTER jumlah");
-    }
-  } catch (Exception $e) {
-    // ignore
-  }
-}
-
-function isOwnerUser($conn, $userID) {
-  try {
-    $stmt = $conn->prepare("SELECT ownerID FROM owner WHERE userID = ? LIMIT 1");
-    $stmt->execute([$userID]);
-    return (bool)$stmt->fetchColumn();
-  } catch (Exception $e) {
-    return false;
-  }
+  exit();
 }
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
-  $data = json_decode(file_get_contents('php://input'), true);
-  $userID = isset($data['userID']) ? intval($data['userID']) : 0;
-  $stokID = isset($data['stokID']) ? intval($data['stokID']) : 0;
-  $qty = isset($data['qty']) ? intval($data['qty']) : 0;
+  $data = json_decode(file_get_contents('php://input'), true) ?: [];
+  $userID = intval($data['userID'] ?? 0);
+  $stokID = intval($data['stokID'] ?? 0);
+  $qty = intval($data['qty'] ?? 0);
   $action = strtolower(trim((string)($data['action'] ?? '')));
+  $keterangan = trim((string)($data['keterangan'] ?? ''));
 
   if (!$userID || !$stokID || $qty <= 0) {
-    echo json_encode(["success" => false, "message" => "userID, stokID, dan qty (positif) wajib diisi"]);
+    echo json_encode(["success" => false, "message" => "userID, stokID, dan qty wajib diisi"]);
     exit();
   }
-
-  if ($action !== 'dispose' && $action !== 'restore') {
+  if (!in_array($action, ['dispose', 'restore'], true)) {
     echo json_encode(["success" => false, "message" => "action harus dispose atau restore"]);
+    exit();
+  }
+  if ($action === 'dispose' && $keterangan === '') {
+    echo json_encode(["success" => false, "message" => "Keterangan wajib diisi saat membuang barang rusak"]);
     exit();
   }
 
   try {
-    ensureKaryawanCabangColumn($conn);
     ensureStokJumlahRusakColumn($conn);
+    ensureStokRusakBuangSchema($conn);
+    requireOwnerForRusakManage($conn, $userID);
 
-    $owner = isOwnerUser($conn, $userID);
-    $cabang = '';
-
-    if (!$owner) {
-      $stmtK = $conn->prepare("SELECT karyawanID, cabang, status FROM karyawan WHERE userID = ?");
-      $stmtK->execute([$userID]);
-      $karyawan = $stmtK->fetch(PDO::FETCH_ASSOC);
-      if (!$karyawan) {
-        throw new Exception("Hanya akun pemilik atau karyawan yang dapat mengelola barang rusak");
-      }
-      if (strtolower(trim((string)($karyawan['status'] ?? ''))) === 'tidak aktif') {
-        throw new Exception("Karyawan tidak aktif");
-      }
-      $cabang = trim((string)($karyawan['cabang'] ?? ''));
-      if ($cabang === '') {
-        throw new Exception("Cabang karyawan belum diisi.");
-      }
-    }
-
-    $stmtS = $conn->prepare("SELECT stokID, lokasi, jumlah, COALESCE(jumlahRusak, 0) AS jumlahRusak FROM stok WHERE stokID = ?");
+    $stmtS = $conn->prepare("SELECT stokID, varianID, lokasi, COALESCE(jumlahRusak,0) AS jumlahRusak FROM stok WHERE stokID=?");
     $stmtS->execute([$stokID]);
     $row = $stmtS->fetch(PDO::FETCH_ASSOC);
-    if (!$row) {
-      throw new Exception("Stok tidak ditemukan");
-    }
-    if (!$owner && trim((string)$row['lokasi']) !== $cabang) {
-      throw new Exception("Stok tidak berada di cabang Anda");
+    if (!$row) throw new Exception("Stok tidak ditemukan");
+    if (intval($row['jumlahRusak']) < $qty) {
+      throw new Exception("Qty melebihi stok rusak. Tersedia: " . intval($row['jumlahRusak']));
     }
 
-    $jumlahRusak = intval($row['jumlahRusak']);
-    if ($jumlahRusak < $qty) {
-      throw new Exception("Qty melebihi stok rusak. Tersedia: $jumlahRusak");
-    }
-
+    $now = date('Y-m-d H:i:s');
     $conn->beginTransaction();
     if ($action === 'dispose') {
-      $stmtUp = $conn->prepare("
-        UPDATE stok SET jumlahRusak = jumlahRusak - ?, tanggalUpdate = ? WHERE stokID = ?
-      ");
-      $stmtUp->execute([$qty, date('Y-m-d H:i:s'), $stokID]);
-      $msg = "$qty unit barang rusak dihapus dari catatan (dibuang / tidak dipakai lagi).";
+      $conn->prepare("UPDATE stok SET jumlahRusak=jumlahRusak-?, tanggalUpdate=? WHERE stokID=?")->execute([$qty, $now, $stokID]);
+      $conn->prepare("INSERT INTO stok_rusak_buang (stokID,varianID,lokasi,jumlah,keterangan,tanggalBuang,userID) VALUES (?,?,?,?,?,?,?)")
+        ->execute([$stokID, $row['varianID'], $row['lokasi'], $qty, $keterangan, $now, $userID]);
+      $msg = "$qty unit barang rusak dibuang dan tercatat.";
     } else {
-      $stmtUp = $conn->prepare("
-        UPDATE stok
-        SET jumlahRusak = jumlahRusak - ?,
-            jumlah = jumlah + ?,
-            tanggalUpdate = ?
-        WHERE stokID = ?
-      ");
-      $stmtUp->execute([$qty, $qty, date('Y-m-d H:i:s'), $stokID]);
-      $msg = "$qty unit dikembalikan dari barang rusak ke stok layak (bisa dijual).";
+      $conn->prepare("UPDATE stok SET jumlahRusak=jumlahRusak-?, jumlah=jumlah+?, tanggalUpdate=? WHERE stokID=?")->execute([$qty, $qty, $now, $stokID]);
+      $msg = "$qty unit dikembalikan ke stok layak.";
     }
     $conn->commit();
-
     echo json_encode(["success" => true, "message" => $msg]);
   } catch (Exception $e) {
-    if ($conn->inTransaction()) {
-      $conn->rollBack();
-    }
+    if ($conn->inTransaction()) $conn->rollBack();
     echo json_encode(["success" => false, "message" => $e->getMessage()]);
   }
   exit();
